@@ -1,0 +1,3 @@
+[submodule "submodule/jsonsh"]
+	path = submodule/jsonsh
+	url = git@github.com:dominictarr/JSON.sh.git
