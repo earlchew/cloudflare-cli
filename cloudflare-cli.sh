@@ -60,7 +60,7 @@ _jsonobjectfield()
 {
     set -- "$(
         print "$2" |
-        while read _field ; do
+        while read -r _field ; do
             _name=$_field
             _name="${_name%%\]*}"
             _name="${_name##*,}"
@@ -94,7 +94,7 @@ _callCloudFlare()
 	    ( _curl "$@"     ; printf "%s" $? >&8 ; ) |
             ( _jsonsh -b >&9 ; printf "%s" $? >&8 ; )
 	) | (
-            read _rc
+            read -r _rc
             : $_rc
             [ -n "${_rc##*[1-9]*}" ] || exit 1
             exit 0
@@ -181,7 +181,7 @@ _cloudflareAction()
 
     _recordindexlist="$(print "$_records" |
         grep '^\["result",[^,]*,"type"\].*"'"$_type"'"$' |
-        while read _record ; do
+        while read -r _record ; do
             _recordindex="$(_jsonindex "$_record")"
             [ -n "$_recordindex" ] ||
                 die "Unable to extract record index $_record"
@@ -192,7 +192,7 @@ _cloudflareAction()
         for _recordindex in $_recordindexlist ; do
             print "$_records" |
             grep '^\["result",'"$_recordindex"',"name"\]' |
-            while read _field ; do
+            while read -r _field ; do
                 [ -z "${_field##*\"$_host\"}" ] || continue
                 print "$_recordindex"
                 exit 0
