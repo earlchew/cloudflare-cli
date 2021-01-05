@@ -92,11 +92,11 @@ _callCloudFlare()
 
             set +e
 	    ( _curl "$@"     ; printf "%s" $? >&8 ; ) |
-            ( _jsonsh -b >&9 ; printf "%s" $? >&8 ; )
+            ( _jsonsh -b >&9 ; printf "%s\n" $? >&8 ; )
 	) | (
             read -r _rc
             : $_rc
-            [ -n "${_rc##*[1-9]*}" ] || exit 1
+            [ x"$_rc" = x"00" ] || exit 1
             exit 0
         )
     )
