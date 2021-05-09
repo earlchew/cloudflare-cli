@@ -80,15 +80,26 @@ _callCloudFlare()
         (
             exec 8>&1
 
-            _email=$1                                      ; shift
-            _apitoken=$1                                   ; shift
+            _auth=$1                                       ; shift
+            _token=$1                                      ; shift
 	    _api="https://api.cloudflare.com/client/v4/$1" ; shift
 
 	    set -- "$_api" "$@"
 	    set -- "$@" -s
 	    set -- "$@" -H Content-Type:application/json
-	    set -- "$@" -H X-Auth-Key:"$_apitoken"
-	    set -- "$@" -H X-Auth-Email:"$_email"
+
+	    case "$_auth" in
+	    Bearer)
+		set -- "$@" -H Authorization:"Bearer $_token"
+		;;
+	    Key)
+		set -- "$@" -H X-Auth-User-Service-Key:"$_token"
+		;;
+	    *)
+		set -- "$@" -H X-Auth-Key:"$_token"
+		set -- "$@" -H X-Auth-Email:"$_auth"
+		;;
+	    esac
 
             set +e
 	    ( _curl "$@"     ; printf "%s" $? >&8 ; ) |
@@ -116,12 +127,12 @@ _checkCloudFlareResult()
 
 _zoneId()
 {
-    local _email=$1    ; shift
-    local _apitoken=$1 ; shift
-    local _zone=$1     ; shift
+    local _auth=$1  ; shift
+    local _token=$1 ; shift
+    local _zone=$1  ; shift
 
     local _zones
-    { _zones="$(_callCloudFlare "$_email" "$_apitoken" "zones?name=$_zone")" &&
+    { _zones="$(_callCloudFlare "$_auth" "$_token" "zones?name=$_zone")" &&
       _checkCloudFlareResult "$_zones" ; } ||
       die "Unable to find zone $_zone"
 
@@ -150,29 +161,29 @@ _zoneId()
 
 _cloudflareAction()
 {
-    local _action=$1   ; shift
-    local _email=$1    ; shift
-    local _apitoken=$1 ; shift
-    local _zone=$1     ; shift
-    local _type=$1     ; shift
-    local _host=$1     ; shift
+    local _action=$1 ; shift
+    local _auth=$1   ; shift
+    local _token=$1  ; shift
+    local _zone=$1   ; shift
+    local _type=$1   ; shift
+    local _name=$1   ; shift
 
-    if [ x"$_host" = x"@" ] ; then
-        _host=$_zone
+    if [ x"$_name" = x"@" ] ; then
+        _name=$_zone
     else
-        _host="$_host.$_zone"
+        _name="$_name.$_zone"
     fi
 
     local _zoneid
-    _zoneid=$(_zoneId "$_email" "$_apitoken" "$_zone")
+    _zoneid=$(_zoneId "$_auth" "$_token" "$_zone")
     [ -n "$_zoneid" ] ||
         die "Unable to determine zone id for $_zone"
 
     local _records
     { _records="$(
         set --
-        set -- "$@" "$_email"
-        set -- "$@" "$_apitoken"
+        set -- "$@" "$_auth"
+        set -- "$@" "$_token"
         set -- "$@" "zones/$_zoneid/dns_records"
         _callCloudFlare "$@")" &&
         _checkCloudFlareResult "$_records" ; } ||
@@ -193,7 +204,7 @@ _cloudflareAction()
             print "$_records" |
             grep '^\["result",'"$_recordindex"',"name"\]' |
             while read -r _field ; do
-                [ -z "${_field##*\"$_host\"}" ] || continue
+                [ -z "${_field##*\"$_name\"}" ] || continue
                 print "$_recordindex"
                 exit 0
             done
@@ -227,8 +238,8 @@ _cloudflareAction()
             if [ -z "${_replacement}" ] ; then
                 (
                     set --
-                    set -- "$@" "$_email"
-                    set -- "$@" "$_apitoken"
+                    set -- "$@" "$_auth"
+                    set -- "$@" "$_token"
                     set -- "$@" "zones/$_zoneid/dns_records/$_recordid"
                     _checkCloudFlareResult "$(
                         _callCloudFlare "$@" -X DELETE)" ||
@@ -240,13 +251,13 @@ _cloudflareAction()
                 (
                     _record=
                     _record="$_record,\"type\": \"$_type\""
-                    _record="$_record,\"name\": \"$_host\""
+                    _record="$_record,\"name\": \"$_name\""
                     _record="$_record,\"content\": \"$_replacement\""
                     _record="{ ${_record#,} }"
 
                     set --
-                    set -- "$@" "$_email"
-                    set -- "$@" "$_apitoken"
+                    set -- "$@" "$_auth"
+                    set -- "$@" "$_token"
                     set -- "$@" "zones/$_zoneid/dns_records/$_recordid"
                     set -- "$@" -d "$_record"
                     _checkCloudFlareResult "$(
@@ -268,19 +279,19 @@ _cloudflareAction()
             (
                 _record=
                 _record="$_record,\"type\": \"$_type\""
-                _record="$_record,\"name\": \"$_host\""
+                _record="$_record,\"name\": \"$_name\""
                 _record="$_record,\"content\": \"$_content\""
                 _record="$_record,\"ttl\": 1"
                 _record="{ ${_record#,} }"
 
                 set --
-                set -- "$@" "$_email"
-                set -- "$@" "$_apitoken"
+                set -- "$@" "$_auth"
+                set -- "$@" "$_token"
                 set -- "$@" "zones/$_zoneid/dns_records"
                 set -- "$@" -d "$_record"
                 _checkCloudFlareResult "$(
                     _callCloudFlare "$@" -X POST)" ||
-                die "Unable to create record for $_host"
+                die "Unable to create record for $_name"
             )
         fi
     fi

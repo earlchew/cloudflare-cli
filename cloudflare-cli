@@ -14,36 +14,52 @@ set -eu
 usage()
 {
     {
-        print "Usage: $0 email apitoken zone type host [ = [ content ] ]"
+        print "Usage: $0 auth zone type name [ = [ content ] ]"
+        print "Arguments:"
+        print "  auth     Authorisation type - Bearer, Service, user@home.com"
+        print "  zone     Zone for action"
+        print "  type     Type of DNS record"
+        print "  name     Name of DNS record"
+        print "  content  Content of DNS record"
         print "Examples:"
         print "  Read A record for www.company.com"
-        print "    $0 user@company.com a31c3d company.com A www"
+        print "    $0 Bearer company.com A www < token"
         print "  Write A record for company.com"
-        print "    $0 user@company.com a31c3d company.com A @ = 10.4.12.3"
+        print "    $0 user@example.com company.com A @ = 10.4.12.3 < token"
         print "  Delete TXT record for test.company.com"
-        print "    $0 user@company.com a31c3d company.com TXT test ="
+        print "    $0 user@example.com company.com TXT test = < token"
     } >&2
     exit 1
 }
 
-[ $# -ge 5 -a $# -le 7 ] &&
-{ [ $# -lt 6 ] || [ x"$6" = x"=" ] ; } || usage
+main()
+{
+    [ $# -lt 1 ] || [ x"$1" != x"--debug" ] || { set -x ; shift ; }
 
-EMAIL=$1    ; shift
-APITOKEN=$1 ; shift
-ZONE=$1     ; shift
-TYPE=$1     ; shift
-HOST=$1     ; shift
+    [ $# -ge 4 -a $# -le 6 ] &&
+    { [ $# -lt 5 ] || [ x"$5" = x"=" ] ; } || usage
 
-if [ $# -eq 0 ] ; then
-    cloudflareRead "$EMAIL" "$APITOKEN" "$ZONE" "$TYPE" "$HOST" ||
-        fail "Unable to read $HOST $TYPE record in zone $ZONE"
-elif [ $# -eq 2 ] ; then
-    cloudflareWrite "$EMAIL" "$APITOKEN" "$ZONE" "$TYPE" "$HOST" "$2" ||
-        fail "Unable to write $HOST $TYPE record in zone $ZONE"
-else
-    cloudflareDelete "$EMAIL" "$APITOKEN" "$ZONE" "$TYPE" "$HOST" ||
-        fail "Unable to delete $HOST $TYPE record in zone $ZONE"
-fi
+    local AUTH=$1 ; shift
+    local ZONE=$1 ; shift
+    local TYPE=$1 ; shift
+    local NAME=$1 ; shift
 
-exit $?
+    # Read the secret token from stdin so that it is not exposed
+    # on the command line.
+
+    local TOKEN
+    read -r TOKEN
+
+    if [ $# -eq 0 ] ; then
+	cloudflareRead "$AUTH" "$TOKEN" "$ZONE" "$TYPE" "$NAME" ||
+	    fail "Unable to read $NAME $TYPE record in zone $ZONE"
+    elif [ $# -eq 2 ] ; then
+	cloudflareWrite "$AUTH" "$TOKEN" "$ZONE" "$TYPE" "$NAME" "$2" ||
+	    fail "Unable to write $NAME $TYPE record in zone $ZONE"
+    else
+	cloudflareDelete "$AUTH" "$TOKEN" "$ZONE" "$TYPE" "$NAME" ||
+	    fail "Unable to delete $NAME $TYPE record in zone $ZONE"
+    fi
+}
+
+main "$@"
