@@ -1,0 +1,66 @@
+#!/bin/sh
+# -*- sh-basic-offset:4; indent-tabs-mode:nil -*- vi: set sw=4 et:
+
+# MIT License
+#
+# Copyright (c) 2016 Earl Chew
+
+[ -z "${0##*/*}" ] || exec "$PWD/$0" "$@" || exit 1
+
+set -e
+
+cloudflare()
+{
+    local EXPECTED=$1 ; shift
+
+    printf 'Test : %s\n' "$*"
+
+    local OBSERVED
+    OBSERVED=$(
+	{
+	    if [ x"$1" = x"!" ] ; then
+		shift
+		! "${0%/*}/cloudflare-cli" "$AUTH" "$ZONE" "$@"
+	    else
+		"${0%/*}/cloudflare-cli" "$AUTH" "$ZONE" "$@"
+	    fi
+	} < "$TOKENFILE"
+    )
+
+    if [ -z "$EXPECTED" ] ; then
+	[ -z "$OBSERVED" ] || printf '%s\n' "$OBSERVED"
+    else
+	printf 'Expected: %s\n' "$EXPECTED"
+	printf 'Observed: %s\n' "$OBSERVED"
+	[ x"$EXPECTED" = x"$OBSERVED" ]
+    fi
+
+    printf 'Test : ok\n'
+}
+
+usage()
+{
+    printf "usage: %s auth tokenfile zone\n" "${0##*/}" >&2
+    exit 1
+}
+
+main()
+{
+    [ $# -eq 3 ] || usage
+
+    local AUTH=$1      ; shift
+    local TOKENFILE=$1 ; shift
+    local ZONE=$1      ; shift
+
+    trap '[ x$? = x0 ] && printf "Test : PASS\n" || printf "Test : FAIL\n"' EXIT
+
+    cloudflare 198.18.0.1 A @
+    cloudflare ''    TXT _acme-challenge = aaa
+    cloudflare 'aaa' TXT _acme-challenge
+    cloudflare ''    TXT _acme-challenge = bbb
+    cloudflare 'bbb' TXT _acme-challenge
+    cloudflare ''    TXT _acme-challenge =
+    cloudflare ''  ! TXT _acme-challenge
+}
+
+main "$@"
